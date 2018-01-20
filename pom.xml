@@ -91,7 +91,7 @@
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>1.5.0</version>
                 <configuration>
-                    <mainClass>sudoku.SudokuGen</mainClass>
+                    <mainClass>sudokugen.SudokuGen</mainClass>
                 </configuration>
             </plugin>
         </plugins>
