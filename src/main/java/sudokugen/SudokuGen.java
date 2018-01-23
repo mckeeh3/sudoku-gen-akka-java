@@ -21,7 +21,7 @@ public class SudokuGen {
         long startTime = System.currentTimeMillis();
         ActorRef sudokuGen = actorSystem.actorOf(SudokuGenActor.props(), "sudokuGen-gen");
 
-        Timeout timeout = new Timeout(1, TimeUnit.MINUTES);
+        Timeout timeout = new Timeout(5, TimeUnit.MINUTES);
         CompletableFuture<Object> responseCF = PatternsCS.ask(sudokuGen, new Level(Difficulty.easy), timeout).toCompletableFuture();
 
         showResult(startTime, responseCF);
