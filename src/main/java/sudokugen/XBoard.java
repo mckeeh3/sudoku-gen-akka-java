@@ -1,11 +1,13 @@
 package sudokugen;
 
+import akka.actor.ActorRef;
+
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
 
-interface Board {
+interface XBoard {
     class Cell implements Serializable {
         final int row;
         final int col;
@@ -45,27 +47,7 @@ interface Board {
         }
     }
 
-    class AllCellsAssigned implements Serializable {
-        @Override
-        public String toString() {
-            return String.format("%s[]", getClass().getSimpleName());
-        }
-    }
-
-    class NextBoard implements Serializable {
-        @Override
-        public String toString() {
-            return String.format("%s[]", getClass().getSimpleName());
-        }
-    }
-
     class Generated implements Serializable {
-        final Board.Grid grid;
-
-        Generated(Grid grid) {
-            this.grid = grid;
-        }
-
         @Override
         public String toString() {
             return String.format("%s[]", getClass().getSimpleName());
@@ -73,15 +55,24 @@ interface Board {
     }
 
     class Invalid implements Serializable {
-        private final String message;
+        @Override
+        public String toString() {
+            return String.format("%s[]", getClass().getSimpleName());
+        }
+    }
 
-        Invalid(String message) {
-            this.message = message;
+    class Clone implements Serializable {
+        final ActorRef boardFrom;
+        final ActorRef boardTo;
+
+        Clone(ActorRef boardFrom, ActorRef boardTo) {
+            this.boardFrom = boardFrom;
+            this.boardTo = boardTo;
         }
 
         @Override
         public String toString() {
-            return String.format("%s[%s]", getClass().getSimpleName(), message);
+            return String.format("%s[from %s, to %s]", getClass().getSimpleName(), boardFrom.path().name(), boardTo.path().name());
         }
     }
 
@@ -111,17 +102,15 @@ interface Board {
         }
     }
 
-    class UnassignedNoChange implements Serializable {
+    class CloneUnassigned implements Serializable {
         final int row;
         final int col;
         final List<Integer> possibleValues;
-        final Board.SetCell setCell;
 
-        UnassignedNoChange(int row, int col, List<Integer> possibleValues, Board.SetCell setCell) {
+        CloneUnassigned(int row, int col, List<Integer> possibleValues) {
             this.row = row;
             this.col = col;
             this.possibleValues = new ArrayList<>(possibleValues);
-            this.setCell = setCell;
         }
 
         @Override
@@ -130,30 +119,48 @@ interface Board {
         }
     }
 
-    class CopyAssignedCells implements Serializable {
-        @Override
-        public String toString() {
-            return String.format("%s[]", getClass().getSimpleName());
-        }
-    }
+    class CloneAssigned implements Serializable {
+        final Cell cell;
 
-    class CopiedAssignedCells implements Serializable {
-        @Override
-        public String toString() {
-            return String.format("%s[]", getClass().getSimpleName());
-        }
-    }
-
-    class CopyOfAssignedCell implements Serializable {
-        final Board.Cell cell;
-
-        CopyOfAssignedCell(Cell cell) {
+        public CloneAssigned(Cell cell) {
             this.cell = cell;
         }
 
         @Override
         public String toString() {
             return String.format("%s[%s]", getClass().getSimpleName(), cell);
+        }
+    }
+
+    class UnassignedRequest implements Serializable {
+        final int row;
+        final int col;
+
+        public UnassignedRequest(int row, int col) {
+            this.row = row;
+            this.col = col;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[(%d, %d)]", getClass().getSimpleName(), row, col);
+        }
+    }
+
+    class UnassignedResponse implements Serializable {
+        final int row;
+        final int col;
+        final List<Integer> possibleValues;
+
+        UnassignedResponse(int row, int col, List<Integer> possibleValues) {
+            this.row = row;
+            this.col = col;
+            this.possibleValues = new ArrayList<>(possibleValues);
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[(%d, %d) %s]", getClass().getSimpleName(), row, col, possibleValues);
         }
     }
 

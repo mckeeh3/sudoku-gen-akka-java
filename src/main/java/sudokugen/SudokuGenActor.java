@@ -6,27 +6,59 @@ import akka.actor.Props;
 
 class SudokuGenActor extends AbstractLoggingActor {
     private int boardNumber = 0;
+    private ActorRef runner;
 
     @Override
     public Receive createReceive() {
         return receiveBuilder()
                 .match(SudokuGen.Level.class, this::boardGenerate)
+                .match(Board.NextBoard.class, this::nextBoard)
                 .match(Board.Generated.class, this::boardGenerated)
                 .build();
     }
 
     private void boardGenerate(SudokuGen.Level difficultyLevel) {
         log().info("Generate board with difficulty level {}", difficultyLevel);
+        runner = getSender();
 
-        ActorRef board = getContext().actorOf(BoardActor.props(), String.format("board-%d", ++boardNumber));
-        getContext().actorOf(BoardGeneratorActor.props(boardNumber, board), String.format("boardGenerator-%d", boardNumber));
+        bootstrapFirstBoard();
+    }
+
+    private void nextBoard(Board.NextBoard nextBoard) {
+        log().debug("{}", nextBoard);
+        triggerCopyOfAssignedCellsFromPrevToNextBoard();
     }
 
     private void boardGenerated(Board.Generated boardGenerated) {
         log().info("{}", boardGenerated);
 
-        // TODO
-        getSender().tell("[-A grid-]", getSelf());
+        runner.tell(boardGenerated, getSelf());
+    }
+
+    private void bootstrapFirstBoard() {
+        ActorRef board = createBoardActor();
+
+        board.tell(new Board.CopyOfAssignedCell(randomCell()), getSelf());
+        board.tell(new Board.CopiedAssignedCells(), getSelf());
+    }
+
+    private Board.Cell randomCell() {
+        int row = Random.inRange(1, 9);
+        int col = Random.inRange(1, 9);
+        int value = Random.inRange(1, 9);
+
+        return new Board.Cell(row, col, value);
+    }
+
+    private void triggerCopyOfAssignedCellsFromPrevToNextBoard() {
+        if (boardNumber < 81) {
+            ActorRef board = createBoardActor();
+            getSender().tell(new Board.CopyAssignedCells(), board);
+        }
+    }
+
+    private ActorRef createBoardActor() {
+        return getContext().actorOf(BoardActor.props(), String.format("board-%d", ++boardNumber));
     }
 
     static Props props() {

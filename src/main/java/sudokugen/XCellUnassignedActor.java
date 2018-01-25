@@ -7,13 +7,13 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
-class CellUnassignedActor extends AbstractLoggingActor {
+class XCellUnassignedActor extends AbstractLoggingActor {
     private final int row;
     private final int col;
     private final List<Integer> possibleValues;
     private final int boxIndex;
 
-    private CellUnassignedActor(int row, int col) {
+    private XCellUnassignedActor(int row, int col) {
         this.row = row;
         this.col = col;
         boxIndex = boxFor(row, col);
@@ -25,11 +25,18 @@ class CellUnassignedActor extends AbstractLoggingActor {
     @Override
     public Receive createReceive() {
         return receiveBuilder()
-                .match(Board.SetCell.class, this::setCell)
+                .match(XBoard.SetCell.class, this::setCell)
+                .match(XBoard.Clone.class, this::boardClone)
+                .match(XBoard.UnassignedRequest.class, this::unassignedRequest)
                 .build();
     }
 
-    private void setCell(Board.SetCell setCell) {
+    @Override
+    public void preStart() {
+        getContext().getParent().tell(XCellsUnassignedActor.cellInitialized, getSelf());
+    }
+
+    private void setCell(XBoard.SetCell setCell) {
         if (isSameCell(setCell)) {
             cellSetBySameCell();
         } else if (isSameRowColOrBox(setCell)) {
@@ -39,56 +46,60 @@ class CellUnassignedActor extends AbstractLoggingActor {
         checkPossibleValues(setCell);
     }
 
-    private boolean isSameCell(Board.SetCell setCell) {
+    private void boardClone(XBoard.Clone boardClone) {
+        boardClone.boardTo.tell(new XBoard.CloneUnassigned(row, col, possibleValues), getSelf());
+    }
+
+    private void unassignedRequest(XBoard.UnassignedRequest unassignedRequest) {
+        if (row == unassignedRequest.row && col == unassignedRequest.col) {
+            getSender().tell(new XBoard.UnassignedResponse(row, col, possibleValues), getSelf());
+        }
+    }
+
+    private boolean isSameCell(XBoard.SetCell setCell) {
         return row == setCell.cell.row && col == setCell.cell.col;
     }
 
-    private boolean isSameRowColOrBox(Board.SetCell setCell) {
+    private boolean isSameRowColOrBox(XBoard.SetCell setCell) {
         return isSameRow(setCell) || isSameCol(setCell) || isSameBox(setCell);
     }
 
-    private boolean isSameRow(Board.SetCell setCell) {
+    private boolean isSameRow(XBoard.SetCell setCell) {
         return row == setCell.cell.row;
     }
 
-    private boolean isSameCol(Board.SetCell setCell) {
+    private boolean isSameCol(XBoard.SetCell setCell) {
         return col == setCell.cell.col;
     }
 
-    private boolean isSameBox(Board.SetCell setCell) {
+    private boolean isSameBox(XBoard.SetCell setCell) {
         return boxIndex == boxFor(setCell.cell.row, setCell.cell.col);
     }
 
-    private void checkPossibleValues(Board.SetCell setCell) {
+    private void checkPossibleValues(XBoard.SetCell setCell) {
         if (possibleValues.size() == 1) {
             cellSetByThisCell();
-        } else {
-            getContext().getParent().tell(new Board.UnassignedNoChange(row, col, possibleValues, setCell), getSelf());
+        } else if (possibleValues.isEmpty()) {
+            cellInvalid(String.format("Set cell (%d, %d) invalid, no remaining possible values %s", row, col, setCell));
         }
     }
 
     private void cellInvalid(String message) {
-        getSender().tell(new Board.Invalid(message), getSelf());
+        getSender().tell(new Cell.Invalid(message), getSelf());
     }
 
     private void cellSetBySameCell() {
-//        getContext().stop(getSelf());
-        while (!possibleValues.isEmpty()) {
-            possibleValues.remove(0);
-        } // TODO
+        getContext().stop(getSelf());
     }
 
     private void cellSetByThisCell() {
-        Board.SetCell setCell = new Board.SetCell(new Board.Cell(row, col, possibleValues.get(0)));
+        XBoard.SetCell setCell = new XBoard.SetCell(new XBoard.Cell(row, col, possibleValues.get(0)));
         getSender().tell(setCell, getSelf());
-//        getContext().stop(getSelf());
-        while (!possibleValues.isEmpty()) {
-            possibleValues.remove(0);
-        } // TODO
+        getContext().stop(getSelf());
         log().debug("cellSetByThisCell {} {}", setCell, getSender().path().name());
     }
 
-    private void trimPossibleValues(Board.SetCell setCell) {
+    private void trimPossibleValues(XBoard.SetCell setCell) {
         possibleValues.removeIf(value -> value == setCell.cell.value);
     }
 
@@ -99,6 +110,6 @@ class CellUnassignedActor extends AbstractLoggingActor {
     }
 
     static Props props(int row, int col) {
-        return Props.create(CellUnassignedActor.class, row, col);
+        return Props.create(XCellUnassignedActor.class, row, col);
     }
 }

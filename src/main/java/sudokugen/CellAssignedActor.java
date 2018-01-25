@@ -4,29 +4,27 @@ import akka.actor.AbstractLoggingActor;
 import akka.actor.Props;
 
 class CellAssignedActor extends AbstractLoggingActor {
-    private final int row;
-    private final int col;
-    private final int value;
+    private final Board.Cell cell;
 
-    CellAssignedActor(int row, int col, int value) {
-        this.row = row;
-        this.col = col;
-        this.value = value;
+    CellAssignedActor(Board.Cell cell) {
+        this.cell = cell;
     }
 
     @Override
     public Receive createReceive() {
         return receiveBuilder()
-                .match(Board.Clone.class, this::boardClone)
+                .match(Board.CopyAssignedCells.class, this::copyAssignedCell)
                 .build();
     }
 
     @SuppressWarnings("unused")
-    private void boardClone(Board.Clone boardClone) {
-        boardClone.boardTo.tell(new Board.SetCell(new Board.Cell(row, col, value)), getSelf());
+    private void copyAssignedCell(Board.CopyAssignedCells copyAssignedCells) {
+        Board.CopyOfAssignedCell copyOfAssignedCell = new Board.CopyOfAssignedCell(cell);
+
+        getContext().getParent().tell(copyOfAssignedCell, getSelf());
     }
 
-    static Props props(int row, int col, int value) {
-        return Props.create(CellAssignedActor.class, row, col, value);
+    static Props props(Board.Cell cell) {
+        return Props.create(CellAssignedActor.class, cell);
     }
 }
