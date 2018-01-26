@@ -18,7 +18,7 @@ class ValidateBoxesActor extends AbstractLoggingActor {
     @Override
     public void preStart() {
         for (int box = 1; box <= 9; box++) {
-            getContext().actorOf(ValidateBoxActor.props(box), String.format("validate-box-%d", box));
+            getContext().actorOf(ValidateBoxActor.props(box), String.format("validateBox-%d", box));
         }
     }
 

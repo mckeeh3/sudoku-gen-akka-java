@@ -18,7 +18,7 @@ class ValidateColumnsActor extends AbstractLoggingActor {
     @Override
     public void preStart() {
         for (int col = 1; col <= 9; col++) {
-            getContext().actorOf(ValidateColumnActor.props(col), String.format("validate-col-%d", col));
+            getContext().actorOf(ValidateColumnActor.props(col), String.format("validateCol-%d", col));
         }
     }
 

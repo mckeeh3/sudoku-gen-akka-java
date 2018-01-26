@@ -28,11 +28,11 @@ class ValidateRowActor extends AbstractLoggingActor {
     private void validateCell(Board.Cell cell) {
         if (isInRow(cell)) {
             if (!values.removeIf(value -> value == cell.value)) {
-                getSender().tell(new Validate.Invalid(String.format("Invalid row %d, %s", row, cell)), getSelf());
+                getSender().tell(new Validate.Invalid(String.format("Row %d, %s", row, cell)), getSelf());
             }
 
             if (values.isEmpty()) {
-                getSender().tell(new Validate.Valid(String.format("Valid row %d", row)), getSelf());
+                getSender().tell(new Validate.Valid(String.format("Row %d", row)), getSelf());
             }
         }
     }

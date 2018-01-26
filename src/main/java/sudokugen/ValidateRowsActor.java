@@ -18,7 +18,7 @@ class ValidateRowsActor extends AbstractLoggingActor {
     @Override
     public void preStart() {
         for (int row = 1; row <= 9; row++) {
-            getContext().actorOf(ValidateRowActor.props(row), String.format("validate-row-%d", row));
+            getContext().actorOf(ValidateRowActor.props(row), String.format("validateRow-%d", row));
         }
     }
 

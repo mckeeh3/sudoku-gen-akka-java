@@ -28,11 +28,11 @@ class ValidateColumnActor extends AbstractLoggingActor {
     private void validateCell(Board.Cell cell) {
         if (isInCol(cell)) {
             if (!values.removeIf(x -> x == cell.value)) {
-                getSender().tell(new Validate.Invalid(String.format("Invalid col %d, %s", col, cell)), getSelf());
+                getSender().tell(new Validate.Invalid(String.format("Col %d, %s", col, cell)), getSelf());
             }
 
             if (values.isEmpty()) {
-                getSender().tell(new Validate.Valid(String.format("Valid col %d", col)), getSelf());
+                getSender().tell(new Validate.Valid(String.format("Col %d", col)), getSelf());
             }
         }
     }

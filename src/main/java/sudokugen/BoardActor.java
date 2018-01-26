@@ -55,10 +55,12 @@ class BoardActor extends AbstractLoggingActor {
                 .match(Board.UnassignedCellTotal.class, this::unassignedTotalHarvest)
                 .match(Board.UnassignedCell.class, this::unassignedCellHarvest)
                 .match(Board.Invalid.class, this::boardInvalid)
+                .match(Board.Generated.class, this::boardGenerated)
                 .build();
 
         advance = receiveBuilder()
                 .match(Board.FetchAssignedCells.class, this::copyAssignedCells)
+                .match(Board.FetchUnassignedCells.class, this::fetchUnassignedCells)
                 .match(Board.Invalid.class, this::boardInvalid)
                 .match(Board.Generated.class, this::boardGenerated)
                 .build();
@@ -80,12 +82,23 @@ class BoardActor extends AbstractLoggingActor {
         return copy;
     }
 
+    @Override
+    public void postStop() {
+        log().debug("Stopped {}", getSelf().path().name());
+        if (boardNext != null) {
+            getContext().stop(boardNext);
+        }
+    }
+
     private void assignedCellTotalCopy(Board.AssignedCellTotal assignedCellTotal) {
         log().debug("{}", assignedCellTotal);
         cellsRequested = assignedCellTotal.total;
         cellsReceived = 0;
 
-        if (cellsRequested == 81) {
+        if (cellsRequested == 0) {
+            become(State.select);
+            boardPrev.tell(new Board.FetchUnassignedCells(), getSelf());
+        } else if (cellsRequested == 81) {
             become(State.generated);
         }
     }
@@ -95,7 +108,7 @@ class BoardActor extends AbstractLoggingActor {
 
         if (++cellsReceived == cellsRequested) {
             become(State.select);
-            cellsUnassigned.tell(new Board.FetchUnassignedCells(), getSelf());
+            boardPrev.tell(new Board.FetchUnassignedCells(), getSelf());
         }
     }
 
@@ -110,6 +123,11 @@ class BoardActor extends AbstractLoggingActor {
     }
 
     private void unassignedCellSelect(Board.UnassignedCell unassignedCell) {
+        unassignedCellSelectFilter(unassignedCell);
+        unassignedCellSelectFinish();
+    }
+
+    private void unassignedCellSelectFilter(Board.UnassignedCell unassignedCell) {
         int size = unassignedCell.possibleValues.size();
 
         if (size > 0) {
@@ -119,12 +137,17 @@ class BoardActor extends AbstractLoggingActor {
                 unassignedCellCandidate = unassignedCell;
             }
         }
+    }
 
+    private void unassignedCellSelectFinish() {
         if (++cellsReceived == cellsRequested) {
-            log().debug("Candidate {}", unassignedCellCandidate);
-            become(State.harvest);
-            setCellWithCandidate();
-            cellsUnassigned.tell(new Board.FetchUnassignedCells(), getSelf());
+            if (unassignedCellCandidate == null) {
+                become(State.generated);
+            } else {
+                become(State.harvest);
+                setCellWithCandidate();
+                cellsUnassigned.tell(new Board.FetchUnassignedCells(), getSelf());
+            }
         }
     }
 
@@ -134,7 +157,9 @@ class BoardActor extends AbstractLoggingActor {
         }
 
         if (candidateCell.hasNext()) {
-            setCell(candidateCell.next());
+            Board.SetCell setCell = candidateCell.next();
+            log().debug("Candidate {} {}", setCell, candidateCell.possibleValues);
+            setCell(setCell);
         } else {
             boardInvalid(new Board.Invalid("No more candidate cell possible values"));
         }
@@ -159,12 +184,15 @@ class BoardActor extends AbstractLoggingActor {
 
     private void copyAssignedCells(Board.FetchAssignedCells fetchAssignedCells) {
         boardNext = getSender();
-        log().debug("Copy assigned cell from {} to {}", getSelf().path().name(), boardNext.path().name());
+        log().debug("Copy assigned cells from {} to {}", getSelf().path().name(), boardNext.path().name());
         cellsAssigned.forward(fetchAssignedCells, getContext());
     }
 
+    private void fetchUnassignedCells(Board.FetchUnassignedCells fetchUnassignedCells) {
+        cellsUnassigned.forward(fetchUnassignedCells, getContext());
+    }
+
     private void setCell(Board.SetCell setCell) {
-//        log().debug("{} {}", setCell, getSender().path().name());
         cellsUnassigned.tell(setCell, getSelf());
         cellsAssigned.tell(setCell, getSelf());
         grid.set(setCell.cell);
@@ -172,7 +200,12 @@ class BoardActor extends AbstractLoggingActor {
 
     private void boardInvalid(Board.Invalid boardInvalid) {
         log().info("Board {}", boardInvalid);
-        if (candidateCell.hasNext()) {
+
+        if (boardNext != null) {
+            getContext().stop(boardNext);
+        }
+
+        if (candidateCell != null && candidateCell.hasNext()) {
             cellsUnassigned.tell(new Board.Reset(), getSelf());
             cellsAssigned.tell(new Board.Reset(), getSelf());
             boardPrev.tell(new Board.FetchAssignedCells(), getSelf());
@@ -185,7 +218,6 @@ class BoardActor extends AbstractLoggingActor {
     }
 
     private void boardGenerated(Board.Generated boardGenerated) {
-        log().debug("Board {} {}", boardGenerated, getSender().path());
         getContext().getParent().tell(boardGenerated, getSelf());
     }
 

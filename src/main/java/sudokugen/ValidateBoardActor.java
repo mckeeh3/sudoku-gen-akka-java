@@ -46,7 +46,7 @@ class ValidateBoardActor extends AbstractLoggingActor {
     private void validRowColBox(Validate.Valid valid) {
         validRowColBox++;
         if (validRowColBox == 3) {
-            getContext().getParent().tell(new Validate.ValidBoard("Board solved", grid), getSelf());
+            getContext().getParent().tell(new Validate.ValidBoard("Generated", grid), getSelf());
         }
     }
 

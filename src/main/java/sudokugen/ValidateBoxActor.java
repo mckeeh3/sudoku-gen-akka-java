@@ -28,11 +28,11 @@ class ValidateBoxActor extends AbstractLoggingActor {
     private void validateCell(Board.Cell cell) {
         if (isInBox(cell)) {
             if (!values.removeIf(value -> value == cell.value)) {
-                getSender().tell(new Validate.Invalid(String.format("Invalid box %d, %s", box, cell)), getSelf());
+                getSender().tell(new Validate.Invalid(String.format("Box %d, %s", box, cell)), getSelf());
             }
 
             if (values.isEmpty()) {
-                getSender().tell(new Validate.Valid(String.format("Valid box %d", box)), getSelf());
+                getSender().tell(new Validate.Valid(String.format("Box %d", box)), getSelf());
             }
         }
     }

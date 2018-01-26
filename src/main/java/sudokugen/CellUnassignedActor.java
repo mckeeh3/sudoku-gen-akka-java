@@ -59,6 +59,7 @@ class CellUnassignedActor extends AbstractLoggingActor {
         return boxIndex == boxFor(setCell.cell.row, setCell.cell.col);
     }
 
+    @SuppressWarnings("unused")
     private void cellSetBySameCell(Board.SetCell setCell) {
         possibleValues.clear();
     }

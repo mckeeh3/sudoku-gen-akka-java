@@ -5,11 +5,14 @@ import akka.actor.ActorRef;
 import akka.actor.Props;
 import akka.actor.Terminated;
 
-import java.util.Optional;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.UUID;
 
 class CellsAssignedActor extends AbstractLoggingActor {
     private int cellCount;
     private ActorRef validateBoard;
+    private final List<String> assignedCells = new ArrayList<>();
 
     {
         validateBoard = createValidateBoardActor();
@@ -28,11 +31,10 @@ class CellsAssignedActor extends AbstractLoggingActor {
     }
 
     private void setCell(Board.SetCell setCell) {
-        String cellActorName = cellActorName(setCell);
-        Optional<ActorRef> cellAssigned = getContext().findChild(cellActorName);
-
-        if (!cellAssigned.isPresent()) {
-            assignCell(setCell, cellActorName);
+        String rowCol = String.format("%d-%d", setCell.cell.row, setCell.cell.col);
+        if (!assignedCells.contains(rowCol)) {
+            assignedCells.add(rowCol);
+            assignCell(setCell, cellActorName(setCell));
         }
     }
 
@@ -55,6 +57,7 @@ class CellsAssignedActor extends AbstractLoggingActor {
     private void boardReset(Board.Reset boardReset) {
         log().debug("{}", boardReset);
         cellCount = 0;
+        assignedCells.clear();
 
         getContext().stop(validateBoard);
         getContext().getChildren().forEach(child -> getContext().stop(child));
@@ -74,7 +77,7 @@ class CellsAssignedActor extends AbstractLoggingActor {
     }
 
     private String cellActorName(Board.SetCell setCell) {
-        return String.format("assigned-%d-%d", setCell.cell.row, setCell.cell.col);
+        return String.format("assigned-%d-%d-%s", setCell.cell.row, setCell.cell.col, UUID.randomUUID());
     }
 
     static Props props() {

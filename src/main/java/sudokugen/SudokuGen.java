@@ -35,7 +35,7 @@ public class SudokuGen {
             if (response instanceof Board.Generated) {
                 Board.Generated generated = (Board.Generated) response;
 
-                System.out.printf("Result %d ms%n", System.currentTimeMillis() - startTime);
+                System.out.printf("Board Generated %d ms%n", System.currentTimeMillis() - startTime);
                 System.out.println(generated.grid);
             }
         } catch (InterruptedException | ExecutionException e) {
