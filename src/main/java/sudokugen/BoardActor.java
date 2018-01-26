@@ -8,64 +8,159 @@ import java.util.ArrayList;
 import java.util.List;
 
 class BoardActor extends AbstractLoggingActor {
+    private final ActorRef boardPrev;
+    private ActorRef boardNext;
     private final ActorRef cellsUnassigned;
     private final ActorRef cellsAssigned;
 
-    private final Receive initializing;
-    private final Receive generateNextCell;
-    private final Receive generateNextBoard;
+    private final Receive copy;
+    private final Receive select;
+    private final Receive harvest;
+    private final Receive advance;
+    private final Receive retry;
+    private final Receive retreat;
     private final Receive generated;
-    private final Receive failed;
 
+    private int cellsRequested;
+    private int cellsReceived;
+
+    private Board.UnassignedCell unassignedCellCandidate;
+    private CandidateCell candidateCell;
     private Board.Grid grid = new Board.Grid();
 
+    BoardActor(ActorRef boardPrev) {
+        this.boardPrev = boardPrev;
+    }
+
     private enum State {
-        generateNextCell, generateNextBoard, generated, failed
+        copy, select, harvest, advance, retry, retreat, generated
     }
 
     {
         cellsUnassigned = getContext().actorOf(CellsUnassignedActor.props(), "cellsUnassigned");
         cellsAssigned = getContext().actorOf(CellsAssignedActor.props(), "cellsAssigned");
 
-        initializing = receiveBuilder()
-                .match(Board.CopyOfAssignedCell.class, this::copyOfAssignedCell)
-                .match(Board.CopiedAssignedCells.class, this::copiedAssignedCells)
+        copy = receiveBuilder()
+                .match(Board.AssignedCellTotal.class, this::assignedCellTotalCopy)
+                .match(Board.AssignedCell.class, this::assignedCellCopy)
                 .build();
 
-        generateNextCell = receiveBuilder()
-                .match(Board.SetCell.class, this::setCell)
-                .match(Board.UnassignedNoChange.class, this::unassignedNoChangeGenerateNextCell)
+        select = receiveBuilder()
+                .match(Board.UnassignedCellTotal.class, this::unassignedTotalSelect)
+                .match(Board.UnassignedCell.class, this::unassignedCellSelect)
                 .match(Board.Invalid.class, this::boardInvalid)
-                .match(Board.AllCellsAssigned.class, this::allCellsAssigned)
+                .build();
+
+        harvest = receiveBuilder()
+                .match(Board.UnassignedCellTotal.class, this::unassignedTotalHarvest)
+                .match(Board.UnassignedCell.class, this::unassignedCellHarvest)
+                .match(Board.Invalid.class, this::boardInvalid)
+                .build();
+
+        advance = receiveBuilder()
+                .match(Board.FetchAssignedCells.class, this::copyAssignedCells)
+                .match(Board.Invalid.class, this::boardInvalid)
                 .match(Board.Generated.class, this::boardGenerated)
                 .build();
 
-        generateNextBoard = receiveBuilder()
-                .match(Board.SetCell.class, this::setCell)
-                .match(Board.UnassignedNoChange.class, this::unassignedNoChangeGenerateNextBoard)
-                .match(Board.CopyAssignedCells.class, this::copyAssignedCells)
+        retry = receiveBuilder()
+                .build();
+
+        retreat = receiveBuilder()
                 .build();
 
         generated = receiveBuilder()
-                .match(Board.Generated.class, this::boardGeneratedIgnore)
-                .build();
-
-        failed = receiveBuilder()
+                .match(Board.Generated.class, this::boardGenerated)
+                .match(Board.AssignedCell.class, this::assignedCellCopyGenerated)
                 .build();
     }
 
     @Override
     public Receive createReceive() {
-        return initializing;
+        return copy;
     }
 
-    private void copyOfAssignedCell(Board.CopyOfAssignedCell copyOfAssignedCell) {
+    private void assignedCellTotalCopy(Board.AssignedCellTotal assignedCellTotal) {
+        log().debug("{}", assignedCellTotal);
+        cellsRequested = assignedCellTotal.total;
+        cellsReceived = 0;
+
+        if (cellsRequested == 81) {
+            become(State.generated);
+        }
+    }
+
+    private void assignedCellCopy(Board.AssignedCell copyOfAssignedCell) {
         setCell(new Board.SetCell(copyOfAssignedCell.cell));
+
+        if (++cellsReceived == cellsRequested) {
+            become(State.select);
+            cellsUnassigned.tell(new Board.FetchUnassignedCells(), getSelf());
+        }
     }
 
-    private void copiedAssignedCells(Board.CopiedAssignedCells copiedAssignedCells) {
-        log().debug("{}", copiedAssignedCells);
-        become(State.generateNextCell);
+    private void unassignedTotalSelect(Board.UnassignedCellTotal unassignedCellTotal) {
+        log().debug("{}", unassignedCellTotal);
+        cellsRequested = unassignedCellTotal.total;
+        cellsReceived = 0;
+
+        if (cellsRequested == 0) {
+            become(State.generated);
+        }
+    }
+
+    private void unassignedCellSelect(Board.UnassignedCell unassignedCell) {
+        int size = unassignedCell.possibleValues.size();
+
+        if (size > 0) {
+            if (unassignedCellCandidate == null) {
+                unassignedCellCandidate = unassignedCell;
+            } else if (size < unassignedCellCandidate.possibleValues.size()) {
+                unassignedCellCandidate = unassignedCell;
+            }
+        }
+
+        if (++cellsReceived == cellsRequested) {
+            log().debug("Candidate {}", unassignedCellCandidate);
+            become(State.harvest);
+            setCellWithCandidate();
+            cellsUnassigned.tell(new Board.FetchUnassignedCells(), getSelf());
+        }
+    }
+
+    private void setCellWithCandidate() {
+        if (candidateCell == null) {
+            candidateCell = new CandidateCell(unassignedCellCandidate);
+        }
+
+        if (candidateCell.hasNext()) {
+            setCell(candidateCell.next());
+        } else {
+            boardInvalid(new Board.Invalid("No more candidate cell possible values"));
+        }
+    }
+
+    private void unassignedTotalHarvest(Board.UnassignedCellTotal unassignedCellTotal) {
+        cellsRequested = unassignedCellTotal.total;
+        cellsReceived = 0;
+    }
+
+    private void unassignedCellHarvest(Board.UnassignedCell unassignedCell) {
+        if (unassignedCell.possibleValues.size() == 1) {
+            Board.Cell cell = new Board.Cell(unassignedCell.row, unassignedCell.col, unassignedCell.possibleValues.get(0));
+            setCell(new Board.SetCell(cell));
+        }
+
+        if (++cellsReceived == cellsRequested) {
+            become(State.advance);
+            getContext().getParent().tell(new Board.NextBoard(), getSelf());
+        }
+    }
+
+    private void copyAssignedCells(Board.FetchAssignedCells fetchAssignedCells) {
+        boardNext = getSender();
+        log().debug("Copy assigned cell from {} to {}", getSelf().path().name(), boardNext.path().name());
+        cellsAssigned.forward(fetchAssignedCells, getContext());
     }
 
     private void setCell(Board.SetCell setCell) {
@@ -75,69 +170,55 @@ class BoardActor extends AbstractLoggingActor {
         grid.set(setCell.cell);
     }
 
-    private void unassignedNoChangeGenerateNextCell(Board.UnassignedNoChange unassignedNoChange) {
-        Board.Cell cell = new Board.Cell(unassignedNoChange.row, unassignedNoChange.col, Random.inList(unassignedNoChange.possibleValues));
-        Board.SetCell setCell = new Board.SetCell(cell);
-        setCell(setCell);
-
-        become(State.generateNextBoard);
-    }
-
-    private void unassignedNoChangeGenerateNextBoard(Board.UnassignedNoChange unassignedNoChange) {
-        getContext().getParent().tell(new Board.NextBoard(), getSelf());
-    }
-
-    private void copyAssignedCells(Board.CopyAssignedCells copyAssignedCells) {
-        cellsAssigned.forward(copyAssignedCells, getContext());
-    }
-
     private void boardInvalid(Board.Invalid boardInvalid) {
-        log().info("XBoard invalid {}", boardInvalid);
-        getContext().getParent().tell(generated, getSelf());
+        log().info("Board {}", boardInvalid);
+        if (candidateCell.hasNext()) {
+            cellsUnassigned.tell(new Board.Reset(), getSelf());
+            cellsAssigned.tell(new Board.Reset(), getSelf());
+            boardPrev.tell(new Board.FetchAssignedCells(), getSelf());
 
-        become(State.failed);
+            become(State.copy);
+        } else {
+            boardPrev.tell(new Board.Invalid("Next board invalid"), getSelf());
+            getContext().stop(getSelf());
+        }
+    }
+
+    private void boardGenerated(Board.Generated boardGenerated) {
+        log().debug("Board {} {}", boardGenerated, getSender().path());
+        getContext().getParent().tell(boardGenerated, getSelf());
     }
 
     @SuppressWarnings("unused")
-    private void allCellsAssigned(Board.AllCellsAssigned allCellsAssigned) {
-        log().info("XBoard generated, all cells assigned");
-        getContext().getParent().tell(new Board.Generated(grid), getSelf());
-
-        become(State.generated);
-    }
-
-    private void boardGenerated(Board.Generated generated) {
-        log().info("XBoard generated {}", generated);
-        getContext().getParent().tell(generated, getSelf());
-
-        become(State.generated);
-    }
-
-    @SuppressWarnings("unused")
-    private void boardGeneratedIgnore(Board.Generated boardGenerated) {
+    private void assignedCellCopyGenerated(Board.AssignedCell assignedCell) {
         // ignore message
     }
 
     private void become(State state) {
         log().debug("Become state {}", state);
         switch (state) {
-            case generateNextCell:
-                getContext().become(generateNextCell);
+            case copy:
+                getContext().become(copy);
                 break;
-            case generateNextBoard:
-                getContext().become(generateNextBoard);
+            case select:
+                getContext().become(select);
                 break;
-            case failed:
-                getContext().become(failed);
+            case harvest:
+                getContext().become(harvest);
+                break;
+            case advance:
+                getContext().become(advance);
+                break;
+            case retry:
+                getContext().become(retry);
+                break;
+            case retreat:
+                getContext().become(retreat);
                 break;
             case generated:
                 getContext().become(generated);
                 break;
         }
-    }
-
-    static Props props() {
-        return Props.create(BoardActor.class);
     }
 
     static class CandidateCell {
@@ -151,6 +232,10 @@ class BoardActor extends AbstractLoggingActor {
             this.possibleValues = new ArrayList<>(possibleValues);
         }
 
+        CandidateCell(Board.UnassignedCell unassignedCellCandidate) {
+            this(unassignedCellCandidate.row, unassignedCellCandidate.col, unassignedCellCandidate.possibleValues);
+        }
+
         boolean hasNext() {
             return !possibleValues.isEmpty();
         }
@@ -161,5 +246,9 @@ class BoardActor extends AbstractLoggingActor {
 
             return new Board.SetCell(new Board.Cell(row, col, value));
         }
+    }
+
+    static Props props(ActorRef boardPrev) {
+        return Props.create(BoardActor.class, boardPrev);
     }
 }

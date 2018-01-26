@@ -26,7 +26,7 @@ class ValidateBoardActor extends AbstractLoggingActor {
                 .match(Board.SetCell.class, this::setCell)
                 .match(Validate.Valid.class, this::validRowColBox)
                 .match(Validate.Invalid.class, this::invalidRowColBox)
-                .match(Board.CopyAssignedCells.class, this::copyAssignedCellsIgnore)
+                .match(Board.FetchAssignedCells.class, this::copyAssignedCellsIgnore)
                 .build();
     }
 
@@ -46,7 +46,7 @@ class ValidateBoardActor extends AbstractLoggingActor {
     private void validRowColBox(Validate.Valid valid) {
         validRowColBox++;
         if (validRowColBox == 3) {
-            getContext().getParent().tell(new Validate.ValidBoard("XBoard solved", grid), getSelf());
+            getContext().getParent().tell(new Validate.ValidBoard("Board solved", grid), getSelf());
         }
     }
 
@@ -56,7 +56,7 @@ class ValidateBoardActor extends AbstractLoggingActor {
     }
 
     @SuppressWarnings("unused")
-    private void copyAssignedCellsIgnore(Board.CopyAssignedCells copyAssignedCells) {
+    private void copyAssignedCellsIgnore(Board.FetchAssignedCells fetchAssignedCells) {
         // ignore message
     }
 

@@ -16,7 +16,7 @@ public class SudokuGen {
     }
 
     public static void main(String[] args) {
-        ActorSystem actorSystem = ActorSystem.create("XSudokuGen");
+        ActorSystem actorSystem = ActorSystem.create("SudokuGen");
 
         long startTime = System.currentTimeMillis();
         ActorRef sudokuGen = actorSystem.actorOf(SudokuGenActor.props(), "sudokuGen");

@@ -13,15 +13,13 @@ class CellAssignedActor extends AbstractLoggingActor {
     @Override
     public Receive createReceive() {
         return receiveBuilder()
-                .match(Board.CopyAssignedCells.class, this::copyAssignedCell)
+                .match(Board.FetchAssignedCells.class, this::copyAssignedCell)
                 .build();
     }
 
     @SuppressWarnings("unused")
-    private void copyAssignedCell(Board.CopyAssignedCells copyAssignedCells) {
-        Board.CopyOfAssignedCell copyOfAssignedCell = new Board.CopyOfAssignedCell(cell);
-
-        getContext().getParent().tell(copyOfAssignedCell, getSelf());
+    private void copyAssignedCell(Board.FetchAssignedCells fetchAssignedCells) {
+        getSender().tell(new Board.AssignedCell(cell), getSelf());
     }
 
     static Props props(Board.Cell cell) {

@@ -16,7 +16,19 @@ class CellsUnassignedActor extends AbstractLoggingActor {
                 .match(Board.SetCell.class, this::setCell)
                 .match(Terminated.class, this::cellStopped)
                 .match(Board.UnassignedNoChange.class, this::unassignedNoChange)
+                .match(Board.FetchUnassignedCells.class, this::fetchUnassignedCells)
+                .match(Board.Reset.class, this::boardReset)
                 .build();
+    }
+
+    @Override
+    public void preStart() {
+        for (int row = 1; row <= 9; row++) {
+            for (int col = 1; col <= 9; col++) {
+                getContext().watch(getContext().actorOf(CellUnassignedActor.props(row, col), cellActorName(row, col)));
+                cellCount++;
+            }
+        }
     }
 
     private void setCell(Board.SetCell setCell) {
@@ -33,11 +45,13 @@ class CellsUnassignedActor extends AbstractLoggingActor {
     @SuppressWarnings("unused")
     private void cellStopped(Terminated terminated) {
         cellCount--;
-        if (isNoChangeToUnassignedCells()) {
-            noChangesToAllCells(lastUnassignedNoChange);
-        } else if (cellCount == 0) {
+
+        if (cellCount == 0) {
             getSender().tell(new Board.AllCellsAssigned(), getSelf());
         }
+
+        cellCountNoChange = 0;
+        setCell(lastSetCell);
     }
 
     private void unassignedNoChange(Board.UnassignedNoChange unassignedNoChange) {
@@ -63,19 +77,18 @@ class CellsUnassignedActor extends AbstractLoggingActor {
     }
 
     private void noChangesToAllCells(Board.UnassignedNoChange unassignedNoChange) {
-        log().debug("{} {} {}", cellCount, cellCountNoChange, unassignedNoChange);
         cellCountNoChange = 0;
         getContext().getParent().tell(unassignedNoChange, getSelf());
     }
 
-    @Override
-    public void preStart() {
-        for (int row = 1; row <= 9; row++) {
-            for (int col = 1; col <= 9; col++) {
-                getContext().watch(getContext().actorOf(CellUnassignedActor.props(row, col), cellActorName(row, col)));
-                cellCount++;
-            }
-        }
+    private void fetchUnassignedCells(Board.FetchUnassignedCells selectUnassignedCells) {
+        getSender().tell(new Board.UnassignedCellTotal(cellCount), getSelf());
+        getContext().getChildren().forEach(child -> child.forward(selectUnassignedCells, getContext()));
+    }
+
+    private void boardReset(Board.Reset boardReset) {
+        log().debug("{}", boardReset);
+        getContext().getChildren().forEach(child -> child.tell(boardReset, getSelf()));
     }
 
     private String cellActorName(int row, int col) {

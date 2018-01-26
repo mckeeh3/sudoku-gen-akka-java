@@ -26,17 +26,17 @@ class CellUnassignedActor extends AbstractLoggingActor {
     public Receive createReceive() {
         return receiveBuilder()
                 .match(Board.SetCell.class, this::setCell)
+                .match(Board.FetchUnassignedCells.class, this::fetchUnassignedCells)
+                .match(Board.Reset.class, this::boardReset)
                 .build();
     }
 
     private void setCell(Board.SetCell setCell) {
         if (isSameCell(setCell)) {
-            cellSetBySameCell();
+            cellSetBySameCell(setCell);
         } else if (isSameRowColOrBox(setCell)) {
             trimPossibleValues(setCell);
         }
-
-        checkPossibleValues(setCell);
     }
 
     private boolean isSameCell(Board.SetCell setCell) {
@@ -59,33 +59,8 @@ class CellUnassignedActor extends AbstractLoggingActor {
         return boxIndex == boxFor(setCell.cell.row, setCell.cell.col);
     }
 
-    private void checkPossibleValues(Board.SetCell setCell) {
-        if (possibleValues.size() == 1) {
-            cellSetByThisCell();
-        } else {
-            getContext().getParent().tell(new Board.UnassignedNoChange(row, col, possibleValues, setCell), getSelf());
-        }
-    }
-
-    private void cellInvalid(String message) {
-        getSender().tell(new Board.Invalid(message), getSelf());
-    }
-
-    private void cellSetBySameCell() {
-//        getContext().stop(getSelf());
-        while (!possibleValues.isEmpty()) {
-            possibleValues.remove(0);
-        } // TODO
-    }
-
-    private void cellSetByThisCell() {
-        Board.SetCell setCell = new Board.SetCell(new Board.Cell(row, col, possibleValues.get(0)));
-        getSender().tell(setCell, getSelf());
-//        getContext().stop(getSelf());
-        while (!possibleValues.isEmpty()) {
-            possibleValues.remove(0);
-        } // TODO
-        log().debug("cellSetByThisCell {} {}", setCell, getSender().path().name());
+    private void cellSetBySameCell(Board.SetCell setCell) {
+        possibleValues.clear();
     }
 
     private void trimPossibleValues(Board.SetCell setCell) {
@@ -96,6 +71,18 @@ class CellUnassignedActor extends AbstractLoggingActor {
         int boxRow = (row - 1) / 3 + 1;
         int boxCol = (col - 1) / 3 + 1;
         return (boxRow - 1) * 3 + boxCol;
+    }
+
+    @SuppressWarnings("unused")
+    private void fetchUnassignedCells(Board.FetchUnassignedCells fetchUnassignedCells) {
+        Board.UnassignedCell unassignedCell = new Board.UnassignedCell(row, col, possibleValues);
+        getSender().tell(unassignedCell, getSelf());
+    }
+
+    @SuppressWarnings("unused")
+    private void boardReset(Board.Reset boardReset) {
+        possibleValues.clear();
+        Collections.addAll(possibleValues, 1, 2, 3, 4, 5, 6, 7, 8, 9);
     }
 
     static Props props(int row, int col) {

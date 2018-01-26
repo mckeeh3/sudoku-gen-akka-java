@@ -3,35 +3,28 @@ package sudokugen;
 import akka.actor.AbstractLoggingActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
+import akka.actor.Terminated;
 
 import java.util.Optional;
 
 class CellsAssignedActor extends AbstractLoggingActor {
     private int cellCount;
-    private int cellCountCopied;
-    private ActorRef copyToBoard;
-    private final ActorRef validateBoard;
+    private ActorRef validateBoard;
 
     {
-        validateBoard = getContext().actorOf(ValidateBoardActor.props(), "validate-board");
+        validateBoard = createValidateBoardActor();
     }
 
     @Override
     public Receive createReceive() {
         return receiveBuilder()
                 .match(Board.SetCell.class, this::setCell)
-                .match(Board.CopyAssignedCells.class, this::copyAssignedCell)
-                .match(Board.CopyOfAssignedCell.class, this::copyOfAssignedCell)
+                .match(Board.FetchAssignedCells.class, this::copyAssignedCell)
+                .match(Validate.Invalid.class, this::boardInvalid)
+                .match(Board.Reset.class, this::boardReset)
+                .match(Terminated.class, this::validatorStopped)
+                .match(Validate.ValidBoard.class, this::boardValid)
                 .build();
-    }
-
-    @SuppressWarnings("unused")
-    private void copyOfAssignedCell(Board.CopyOfAssignedCell copyOfAssignedCell) {
-        copyToBoard.tell(copyOfAssignedCell, getSelf());
-
-        if (++cellCountCopied == cellCount) {
-            copyToBoard.tell(new Board.CopiedAssignedCells(), getSelf());
-        }
     }
 
     private void setCell(Board.SetCell setCell) {
@@ -39,17 +32,45 @@ class CellsAssignedActor extends AbstractLoggingActor {
         Optional<ActorRef> cellAssigned = getContext().findChild(cellActorName);
 
         if (!cellAssigned.isPresent()) {
-            log().debug("Assign {}", setCell);
-            cellCount++;
-            getContext().actorOf(CellAssignedActor.props(setCell.cell), cellActorName);
-            validateBoard.tell(setCell, getSelf());
+            assignCell(setCell, cellActorName);
         }
     }
 
-    private void copyAssignedCell(Board.CopyAssignedCells copyAssignedCells) {
-        cellCountCopied = 0;
-        copyToBoard = getSender();
-        getContext().getChildren().forEach(child -> child.tell(copyAssignedCells, getSelf()));
+    private void assignCell(Board.SetCell setCell, String cellActorName) {
+        log().debug("Assign {}", setCell);
+        cellCount++;
+        getContext().actorOf(CellAssignedActor.props(setCell.cell), cellActorName);
+        validateBoard.tell(setCell, getSelf());
+    }
+
+    private void copyAssignedCell(Board.FetchAssignedCells fetchAssignedCells) {
+        getSender().tell(new Board.AssignedCellTotal(cellCount), getSelf());
+        getContext().getChildren().forEach(child -> child.forward(fetchAssignedCells, getContext()));
+    }
+
+    private void boardInvalid(Validate.Invalid cellInvalid) {
+        getContext().getParent().tell(new Board.Invalid(cellInvalid.toString()), getSelf());
+    }
+
+    private void boardReset(Board.Reset boardReset) {
+        log().debug("{}", boardReset);
+        cellCount = 0;
+
+        getContext().stop(validateBoard);
+        getContext().getChildren().forEach(child -> getContext().stop(child));
+    }
+
+    @SuppressWarnings("unused")
+    private void validatorStopped(Terminated validatorStopped) {
+        validateBoard = createValidateBoardActor();
+    }
+
+    private void boardValid(Validate.ValidBoard boardValid) {
+        getContext().getParent().tell(new Board.Generated(boardValid.grid), getSelf());
+    }
+
+    private ActorRef createValidateBoardActor() {
+        return getContext().watch(getContext().actorOf(ValidateBoardActor.props(), "validateBoard"));
     }
 
     private String cellActorName(Board.SetCell setCell) {

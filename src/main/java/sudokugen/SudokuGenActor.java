@@ -25,7 +25,7 @@ class SudokuGenActor extends AbstractLoggingActor {
     }
 
     private void nextBoard(Board.NextBoard nextBoard) {
-        log().debug("{}", nextBoard);
+        log().debug("Created {} requested by {}", nextBoard, getSender().path().name());
         triggerCopyOfAssignedCellsFromPrevToNextBoard();
     }
 
@@ -38,8 +38,9 @@ class SudokuGenActor extends AbstractLoggingActor {
     private void bootstrapFirstBoard() {
         ActorRef board = createBoardActor();
 
-        board.tell(new Board.CopyOfAssignedCell(randomCell()), getSelf());
-        board.tell(new Board.CopiedAssignedCells(), getSelf());
+        board.tell(new Board.AssignedCellTotal(1), getSelf());
+        board.tell(new Board.AssignedCell(randomCell()), getSelf());
+//        board.tell(new Board.CopiedAssignedCells(), getSelf());
     }
 
     private Board.Cell randomCell() {
@@ -53,12 +54,14 @@ class SudokuGenActor extends AbstractLoggingActor {
     private void triggerCopyOfAssignedCellsFromPrevToNextBoard() {
         if (boardNumber < 81) {
             ActorRef board = createBoardActor();
-            getSender().tell(new Board.CopyAssignedCells(), board);
+            getSender().tell(new Board.FetchAssignedCells(), board);
+        } else {
+            runner.tell(new Board.Invalid("Board generation failed"), getSelf());
         }
     }
 
     private ActorRef createBoardActor() {
-        return getContext().actorOf(BoardActor.props(), String.format("board-%d", ++boardNumber));
+        return getContext().actorOf(BoardActor.props(getSender()), String.format("board-%d", ++boardNumber));
     }
 
     static Props props() {

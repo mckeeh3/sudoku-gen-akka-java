@@ -38,13 +38,6 @@ interface Board {
         }
     }
 
-    class Generate implements Serializable {
-        @Override
-        public String toString() {
-            return String.format("%s[]", getClass().getSimpleName());
-        }
-    }
-
     class AllCellsAssigned implements Serializable {
         @Override
         public String toString() {
@@ -60,7 +53,7 @@ interface Board {
     }
 
     class Generated implements Serializable {
-        final Board.Grid grid;
+        final Grid grid;
 
         Generated(Grid grid) {
             this.grid = grid;
@@ -130,30 +123,80 @@ interface Board {
         }
     }
 
-    class CopyAssignedCells implements Serializable {
+    class FetchAssignedCells implements Serializable {
         @Override
         public String toString() {
             return String.format("%s[]", getClass().getSimpleName());
         }
     }
 
-    class CopiedAssignedCells implements Serializable {
+    class AssignedCellTotal implements Serializable {
+        final int total;
+
+        AssignedCellTotal(int total) {
+            this.total = total;
+        }
+
         @Override
         public String toString() {
-            return String.format("%s[]", getClass().getSimpleName());
+            return String.format("%s[%d]", getClass().getSimpleName(), total);
         }
     }
 
-    class CopyOfAssignedCell implements Serializable {
+    class AssignedCell implements Serializable {
         final Board.Cell cell;
 
-        CopyOfAssignedCell(Cell cell) {
+        AssignedCell(Cell cell) {
             this.cell = cell;
         }
 
         @Override
         public String toString() {
             return String.format("%s[%s]", getClass().getSimpleName(), cell);
+        }
+    }
+
+    class FetchUnassignedCells implements Serializable {
+        @Override
+        public String toString() {
+            return String.format("%s[]", getClass().getSimpleName());
+        }
+    }
+
+    class UnassignedCellTotal implements Serializable {
+        final int total;
+
+        UnassignedCellTotal(int total) {
+            this.total = total;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[%d]", getClass().getSimpleName(), total);
+        }
+    }
+
+    class UnassignedCell implements Serializable {
+        final int row;
+        final int col;
+        final List<Integer> possibleValues;
+
+        UnassignedCell(int row, int col, List<Integer> possibleValues) {
+            this.row = row;
+            this.col = col;
+            this.possibleValues = possibleValues;
+        }
+
+        @Override
+        public String toString() {
+            return String.format("%s[(%d, %d) %s]", getClass().getSimpleName(), row, col, possibleValues);
+        }
+    }
+
+    class Reset implements Serializable {
+        @Override
+        public String toString() {
+            return String.format("%s[]", getClass().getSimpleName());
         }
     }
 
